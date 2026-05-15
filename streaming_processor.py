@@ -14,13 +14,13 @@ schema = StructType([
 
 spark = SparkSession.builder \
     .appName("WikimediaStreamProcessor") \
-    .config("spark.sql.streaming.checkpointLocation", "/tmp/spark_checkpoint") \
+.config("spark.sql.streaming.checkpointLocation", "/tmp/spark_checkpoint") \
     .enableHiveSupport() \
     .getOrCreate()
 
 df_raw = spark.readStream \
     .format("kafka") \
-    .option("kafka.bootstrap.servers", "localhost:9092") \
+    .option("kafka.bootstrap.servers", "kafka-server:9092") \
     .option("subscribe", "wikimedia-events") \
     .option("startingOffsets", "latest") \
     .load()

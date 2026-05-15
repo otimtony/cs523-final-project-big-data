@@ -1,45 +1,39 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import json
-import time
+import requests
 from kafka import KafkaProducer
-import ssl
-import websocket
 
-# Kafka setup
+KAFKA_BROKER = 'kafka-server:9092'
+TOPIC = 'wikimedia-events'
+URL = "https://stream.wikimedia.org/v2/stream/recentchange"
+HEADERS = {
+    "User-Agent": "cs523-final-project/1.0 (dwabuluka@gmail.com)",
+    "Accept": "text/event-stream",
+}
+
 producer = KafkaProducer(
-    bootstrap_servers='localhost:9092',
+    bootstrap_servers=KAFKA_BROKER,
     value_serializer=lambda v: json.dumps(v).encode('utf-8')
 )
 
-# Wikimedia SSE stream URL (Server-Sent Events)
-URL = "wss://stream.wikimedia.org/v2/stream/recentchange"
-
-def on_message(ws, message):
-    if message.startswith("data:"):
-        try:
-            # Strip 'data: ' prefix and parse JSON
-            data_str = message[5:].strip()
-            event = json.loads(data_str)
-            # Send to Kafka topic
-            producer.send('wikimedia-events', event)
-            print(f"Sent: {event.get('title', 'unknown')}")
-        except Exception as e:
-            print(f"Error: {e}")
-
-def on_error(ws, error):
-    print(f"WebSocket error: {error}")
-
-def on_close(ws, close_status_code, close_msg):
-    print("WebSocket closed")
-
-def on_open(ws):
-    print("Connected to Wikimedia stream")
+def stream_events():
+    print(f"Connecting to {URL} ...")
+    with requests.get(URL, headers=HEADERS, stream=True) as resp:
+        resp.raise_for_status()
+        print("Connected. Streaming events...")
+        for raw_line in resp.iter_lines():
+            if not raw_line:
+                continue
+            line = raw_line.decode('utf-8')
+            if not line.startswith('data:'):
+                continue
+            data_str = line[5:].strip()
+            try:
+                event = json.loads(data_str)
+                producer.send(TOPIC, event)
+                print(f"Sent: {event.get('title', 'unknown')}")
+            except Exception as e:
+                print(f"Error parsing event: {e}")
 
 if __name__ == "__main__":
-    websocket.enableTrace(False)
-    ws = websocket.WebSocketApp(URL,
-                                on_open=on_open,
-                                on_message=on_message,
-                                on_error=on_error,
-                                on_close=on_close)
-    ws.run_forever()
+    stream_events()

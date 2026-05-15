@@ -1,0 +1,11 @@
+namespace,label,description,type
+0,Main Article,Main encyclopedia articles,content
+1,Talk,Discussion pages for articles,discussion
+2,User,User personal pages,user
+3,User Talk,Discussion with users,discussion
+4,Wikipedia,Wikipedia project pages,project
+6,File,Media files and images,media
+10,Template,Reusable page templates,infrastructure
+14,Category,Article categorization,infrastructure
+100,Portal,Topic portal pages,content
+118,Draft,Draft articles awaiting review,content

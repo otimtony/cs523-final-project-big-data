@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wikimedia Real-Time Edit Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    #status { font-size: 0.85rem; color: #8b949e; }
+
+    /* ── Stat cards ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 20px 24px;
+    }
+    .stat-card .label {
+      font-size: 0.78rem;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+    .stat-card .value {
+      font-size: 32px;
+      font-weight: 700;
+    }
+    .stat-card:nth-child(1) .value,
+    .stat-card:nth-child(2) .value { color: #58a6ff; }
+    .stat-card:nth-child(3) .value { color: #f7931a; }
+    .stat-card:nth-child(4) .value { color: #3fb950; }
+
+    /* ── Charts ── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .chart-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 20px 24px;
+    }
+    .chart-card h2 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #e6edf3;
+    }
+    .chart-card canvas { width: 100% !important; }
+
+    /* ── Events table ── */
+    .table-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 20px 24px;
+      overflow-x: auto;
+    }
+    .table-card h2 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #e6edf3;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    th {
+      text-align: left;
+      color: #8b949e;
+      font-weight: 600;
+      padding: 8px 12px;
+      border-bottom: 1px solid #30363d;
+      white-space: nowrap;
+    }
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #21262d;
+      color: #e6edf3;
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    tr:hover td { background: #1f2937; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .badge-bot   { background: #1f3f6e; color: #58a6ff; }
+    .badge-human { background: #1a3a25; color: #3fb950; }
+
+    /* ── Responsive tweaks ── */
+    @media (max-width: 900px) {
+      .stats-grid  { grid-template-columns: repeat(2, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 500px) {
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SECTION 1 — Header -->
+  <header>
+    <h1>🌐 Wikimedia Real-Time Edit Dashboard</h1>
+    <span id="status">Initialising…</span>
+  </header>
+
+  <!-- SECTION 2 — Stat cards -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">Total Edits Tracked</div>
+      <div class="value" id="stat-total">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Raw Events Stored</div>
+      <div class="value" id="stat-events">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Bot Edits</div>
+      <div class="value" id="stat-bots">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Human Edits</div>
+      <div class="value" id="stat-humans">—</div>
+    </div>
+  </div>
+
+  <!-- SECTION 3 — Charts -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h2>📊 Edits by Wikipedia Namespace (Last Window)</h2>
+      <canvas id="nsChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h2>📈 Edit Rate Over Time</h2>
+      <canvas id="rateChart"></canvas>
+    </div>
+  </div>
+
+  <!-- SECTION 4 — Live events table -->
+  <div class="table-card">
+    <h2>⚡ Live Edit Feed (Latest 20)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Title</th>
+          <th>User</th>
+          <th>Namespace</th>
+          <th>Type</th>
+          <th>Author</th>
+        </tr>
+      </thead>
+      <tbody id="events-body">
+        <tr><td colspan="6" style="color:#8b949e;text-align:center;">Waiting for data…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    // ── Namespace label map ──────────────────────────────────────────────────
+    const NS_LABELS = {
+      0: 'Main/Article', 1: 'Talk', 2: 'User', 3: 'User Talk',
+      4: 'Wikipedia', 6: 'File', 10: 'Template', 14: 'Category',
+      100: 'Portal', 118: 'Draft'
+    };
+
+    function nsLabel(ns) {
+      return NS_LABELS[ns] ?? 'NS:' + ns;
+    }
+
+    // ── Chart colours ────────────────────────────────────────────────────────
+    const BAR_COLOURS = [
+      '#58a6ff', '#3fb950', '#f7931a', '#f78166',
+      '#d2a8ff', '#ffa657', '#79c0ff', '#56d364'
+    ];
+
+    const DARK_AXIS = {
+      ticks: { color: '#8b949e' },
+      grid:  { color: '#21262d' },
+    };
+
+    // ── Namespace bar chart ──────────────────────────────────────────────────
+    const nsChart = new Chart(document.getElementById('nsChart'), {
+      type: 'bar',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Change Count',
+          data: [],
+          backgroundColor: BAR_COLOURS,
+          borderRadius: 5,
+        }]
+      },
+      options: {
+        animation: false,
+        plugins: { legend: { display: false } },
+        scales: { x: DARK_AXIS, y: DARK_AXIS },
+      }
+    });
+
+    // ── Edit rate line chart ─────────────────────────────────────────────────
+    const rateChart = new Chart(document.getElementById('rateChart'), {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Total Edits/Window',
+          data: [],
+          borderColor: '#58a6ff',
+          backgroundColor: '#58a6ff22',
+          tension: 0.4,
+          fill: true,
+          pointRadius: 3,
+        }]
+      },
+      options: {
+        animation: false,
+        plugins: { legend: { labels: { color: '#8b949e' } } },
+        scales: { x: DARK_AXIS, y: DARK_AXIS },
+      }
+    });
+
+    // ── updateNamespaceChart ─────────────────────────────────────────────────
+    async function updateNamespaceChart() {
+      const res    = await fetch('/api/namespace-counts');
+      const { counts = [] } = await res.json();
+
+      const sorted = [...counts]
+        .sort((a, b) => b.change_count - a.change_count)
+        .slice(0, 8);
+
+      nsChart.data.labels             = sorted.map(c => nsLabel(Number(c.namespace)));
+      nsChart.data.datasets[0].data   = sorted.map(c => c.change_count);
+      nsChart.update();
+
+      const total     = counts.reduce((s, c) => s + Number(c.change_count), 0);
+      const timeLabel = new Date().toLocaleTimeString();
+
+      rateChart.data.labels.push(timeLabel);
+      rateChart.data.datasets[0].data.push(total);
+
+      if (rateChart.data.labels.length > 20) {
+        rateChart.data.labels.shift();
+        rateChart.data.datasets[0].data.shift();
+      }
+      rateChart.update();
+    }
+
+    // ── updateStats ──────────────────────────────────────────────────────────
+    async function updateStats() {
+      const res  = await fetch('/api/stats');
+      const data = await res.json();
+
+      document.getElementById('stat-total').innerHTML  = (data.total_edits  ?? 0).toLocaleString();
+      document.getElementById('stat-events').innerHTML = (data.total_events ?? 0).toLocaleString();
+      document.getElementById('stat-bots').innerHTML   = (data.bot_edits    ?? 0).toLocaleString();
+      document.getElementById('stat-humans').innerHTML = (data.human_edits  ?? 0).toLocaleString();
+    }
+
+    // ── updateEventsTable ────────────────────────────────────────────────────
+    async function updateEventsTable() {
+      const res      = await fetch('/api/recent');
+      const { events = [] } = await res.json();
+      const tbody    = document.getElementById('events-body');
+      const slice    = events.slice(0, 20);
+
+      if (!slice.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:#8b949e;text-align:center;">Waiting for data…</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = slice.map(ev => {
+        const time   = new Date(parseInt(ev.timestamp)).toLocaleTimeString();
+        const title  = ev.title ?? '';
+        const ns     = nsLabel(Number(ev.namespace));
+        const isBot  = ev.bot === 'true';
+        const badge  = isBot
+          ? '<span class="badge badge-bot">🤖 Bot</span>'
+          : '<span class="badge badge-human">👤 Human</span>';
+
+        return `<tr>
+          <td>${time}</td>
+          <td title="${title.replace(/"/g, '&quot;')}">${title}</td>
+          <td>${ev.user ?? ''}</td>
+          <td>${ns}</td>
+          <td>${ev.type ?? ''}</td>
+          <td>${badge}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // ── refresh (called on load + every 8 s) ─────────────────────────────────
+    async function refresh() {
+      const statusEl = document.getElementById('status');
+      try {
+        await Promise.all([
+          updateNamespaceChart(),
+          updateStats(),
+          updateEventsTable(),
+        ]);
+        statusEl.textContent = '✅ Last updated: ' + new Date().toLocaleTimeString();
+        statusEl.style.color = '#3fb950';
+      } catch (err) {
+        statusEl.textContent = '❌ ' + err.message;
+        statusEl.style.color = '#f78166';
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 8000);
+  </script>
+</body>
+</html>

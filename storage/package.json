@@ -1,0 +1,17 @@
+{
+  "name": "wikimedia-hbase-storage",
+  "version": "1.0.0",
+  "description": "Kafka consumer that writes Wikimedia events to HBase via REST API",
+  "main": "hbase_writer.js",
+  "scripts": {
+    "start": "node hbase_writer.js"
+  },
+  "dependencies": {
+    "kafkajs": "^2.2.4",
+    "node-fetch": "^2.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
